@@ -1,22 +1,30 @@
-#ifndef SD_READWRITE_H
-#define SD_READWRITE_H
+#ifndef SD_DRIVER_H
+#define SD_DRIVER_H
 
 #include <Arduino.h>
-#include "FS.h"
-#include "SD_MMC.h"
+#include <FS.h>
+#include <SD_MMC.h>
+#include "datatypes.h"
 
 constexpr uint8_t SD_CLK = 39;
 constexpr uint8_t SD_CMD = 38;
 constexpr uint8_t SD_D0  = 40;
 
-bool NL_init_sd_card();
+bool SD_begin();
+bool SD_isMounted();
 
+bool SD_writeFile(const char *path, const String &text);
+String SD_readFile(const char *path);
+bool SD_appendFile(const char *path, const String &text);
+bool SD_deleteFile(const char *path);
 
+// Project-specific helpers
+bool SD_createLog();
+bool SD_writeReading(const DeviceStatus &device);
+bool SD_writeEvent(const String &event);
 
-// unimplemented functions
-bool NL_write_file(const char *path, const String &text);
-String NL_read_file(const char *path);
-bool NL_append_file(const char *path, const String &text);
-bool NL_delete_file(const char *path);
+bool SD_writeReading(const DeviceStatus &device);
+static bool SD_createProjectStructure();
+bool SD_writeEvent(const String &event);
 
-#endif // SD_READWRITE_H
+#endif

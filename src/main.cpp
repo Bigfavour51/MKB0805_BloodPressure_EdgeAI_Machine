@@ -1,12 +1,26 @@
 #include <Arduino.h>
-
 #include "datatypes.h"
 #include "bp_sensor.h"
 #include "oled_driver.h"
-#include "StateMachine.h"
 #include "buzzer_driver.h"
+#include "StateMachine.h"
+
+#include "SD_ReadWrite.h"
+
+#include "wifi_manager.h"
+#include "Web_Server.h"
+
+
+/* =========================================================
+ * Global Device Status
+ * ========================================================= */
 
 DeviceStatus device;
+
+
+/* =========================================================
+ * SETUP
+ * ========================================================= */
 
 void setup()
 {
@@ -17,175 +31,360 @@ void setup()
         delay(10);
     }
 
+
     Serial.println();
     Serial.println("======================================");
-    Serial.println(" Adaramola Blood Pressure Monitor");
+    Serial.println(" NORAHLINKS BP MONITOR");
+    Serial.println(" ESP32-S3 Edge AI Prototype");
     Serial.println("======================================");
 
-    //--------------------------------------------------
-    // Initialize device status
-    //--------------------------------------------------
+
+    /* =====================================================
+     * Initial Device State
+     * ===================================================== */
+
     device.state = DeviceState::BOOT;
+
     device.uptime = millis();
 
-    //--------------------------------------------------
-    // Initialize all drivers
-    //--------------------------------------------------
-    OLED_begin();
-    Buzzer_begin();
-    BP_begin();
-    StateMachine_begin(device);
+    device.sensorConnected = false;
 
-    //--------------------------------------------------
-    // Startup beep
-    //--------------------------------------------------
-    Buzzer_play(BuzzerPattern::STARTUP);
+    device.sdMounted = false;
 
-     //--------------------------------------------------
-    // Display first screen
-    //--------------------------------------------------
-    OLED_update(device);
-
-    //--------------------------------------------------
-    // Simulate hardware status
-    //--------------------------------------------------
-    device.sensorConnected = true;
-    device.sdMounted = true;
     device.wifiConnected = false;
+
     device.mqttConnected = false;
+
+    device.anomalyDetected = false;
+
+    device.measuring = false;
+
     device.batteryLevel = 100;
 
-    //--------------------------------------------------
-    // Generate first reading
-    //--------------------------------------------------
-    BP_measure(device);
+    device.alertLevel = AlertLevel::NONE;
+
+    device.simulationMode = SimulationMode::NORMAL;
 
 
+    /* =====================================================
+     * OLED
+     * ===================================================== */
+
+    Serial.println("[INIT] OLED...");
+
+    OLED_begin();
+
+
+    /* =====================================================
+     * Buzzer
+     * ===================================================== */
+
+    Serial.println("[INIT] Buzzer...");
+
+    Buzzer_begin();
+
+
+    /* =====================================================
+     * Blood Pressure Sensor
+     * ===================================================== */
+
+    Serial.println("[INIT] BP Sensor...");
+
+    BP_begin();
+
+    device.sensorConnected =
+        BP_isConnected();
+
+
+    /* =====================================================
+     * SD Card
+     * ===================================================== */
+
+    Serial.println("[INIT] SD Card...");
+
+    device.sdMounted =
+        SD_begin();
+
+
+    /* =====================================================
+     * State Machine
+     * ===================================================== */
+
+    Serial.println("[INIT] State Machine...");
+
+    StateMachine_begin(device);
+
+
+    /* =====================================================
+     * Wi-Fi
+     * ===================================================== */
+
+    Serial.println("[INIT] Wi-Fi...");
+
+    bool wifiOK =
+        WiFiManager_begin();
+
+    device.wifiConnected =
+        wifiOK;
+
+
+    /* =====================================================
+     * Web Server
+     * ===================================================== */
+
+    Serial.println("[INIT] Web Server...");
+
+    WebServer_begin(device);
+
+
+    /* =====================================================
+     * Simulated BP Reading
+     * ===================================================== */
+
+    Serial.println("[TEST] Generating simulated BP reading...");
+
+    BP_setSimulationMode(
+        SimulationMode::NORMAL
+    );
+
+    // BP_measure(device);
+
+
+    /* =====================================================
+     * OLED Status
+     * ===================================================== */
+
+    OLED_update(device);
+
+
+    /* =====================================================
+     * Final State
+     * ===================================================== */
+
+    device.state =
+        DeviceState::WAITING;
+
+
+    OLED_update(device);
+
+
+    /* =====================================================
+     * Startup Information
+     * ===================================================== */
+
+    Serial.println();
+    Serial.println("======================================");
+    Serial.println(" SYSTEM READY");
+    Serial.println("======================================");
+
+    Serial.print("[WiFi] Mode: ");
+
+    if (WiFiManager_isAPMode())
+    {
+        Serial.println("ACCESS POINT");
+    }
+    else
+    {
+        Serial.println("STATION");
+    }
+
+
+    Serial.print("[WiFi] IP Address: ");
+
+    Serial.println(
+        WiFiManager_getIP()
+    );
+
+
+    Serial.println();
+
+    Serial.println(
+        "[Web] Open the IP address above"
+    );
+
+    Serial.println(
+        "[Web] Dashboard: http://<IP>/"
+    );
+
+    Serial.println(
+        "[Web] API:       http://<IP>/api/status"
+    );
+
+    Serial.println();
 }
+
+
+/* =========================================================
+ * LOOP
+ * ========================================================= */
 
 void loop()
 {
-    //--------------------------------------------------
-    // Keep non-blocking drivers running
-    //--------------------------------------------------
+    /* =====================================================
+     * Wi-Fi
+     * ===================================================== */
 
-    Buzzer_update();
-    OLED_update(device);
+    WiFiManager_update();
 
-    static uint32_t timer = 0;
 
-    if (millis() - timer >= 3000)
+    /*
+     * Keep DeviceStatus synchronized with Wi-Fi manager.
+     */
+
+    device.wifiConnected =
+        WiFiManager_isConnected();
+
+
+    /* =====================================================
+     * Web Server
+     * ===================================================== */
+
+    WebServer_update();
+
+
+    /* =====================================================
+     * Device Uptime
+     * ===================================================== */
+
+    device.uptime =
+        millis();
+
+
+    /* =====================================================
+     * Simulated Measurement Cycle
+     * ===================================================== */
+
+    static uint32_t measurementTimer = 0;
+
+
+    if (millis() - measurementTimer >= 5000)
     {
-        timer = millis();
+        measurementTimer =
+            millis();
+
 
         switch (device.state)
         {
-            //--------------------------------------------------
-            case DeviceState::BOOT:
-            //--------------------------------------------------
-            {
-                Serial.println("BOOT");
-                device.state = DeviceState::WAITING;
-            }
-            break;
 
-            //--------------------------------------------------
             case DeviceState::WAITING:
-            //--------------------------------------------------
-            {
-                Serial.println("WAITING");
 
-                Buzzer_play(BuzzerPattern::BUTTON);
+                Serial.println();
+                Serial.println(
+                    "[BP] Starting measurement..."
+                );
 
-                device.state = DeviceState::MEASURING;
-            }
-            break;
+                device.state =
+                    DeviceState::MEASURING;
 
-            //--------------------------------------------------
+                break;
+
+
             case DeviceState::MEASURING:
-            //--------------------------------------------------
-            {
-                Serial.println("MEASURING");
+
+                device.measuring = true;
 
                 BP_measure(device);
 
-                Buzzer_play(BuzzerPattern::SUCCESS);
+                device.measuring = false;
 
-                device.state = DeviceState::PROCESSING;
-            }
-            break;
+                device.state =
+                    DeviceState::PROCESSING;
 
-            //--------------------------------------------------
+                break;
+
+
             case DeviceState::PROCESSING:
-            //--------------------------------------------------
-            {
-                Serial.println("PROCESSING");
 
-                // 25% chance of abnormal reading
-                if (random(100) < 25)
-                {
-                    device.alertLevel = AlertLevel::CRITICAL;
-                    device.state = DeviceState::ALERT;
-                }
-                else
-                {
-                    device.alertLevel = AlertLevel::NONE;
-                    device.state = DeviceState::DISPLAY_RESULT;
-                }
-            }
-            break;
+                /*
+                 * In the future this is where the
+                 * Edge AI classification can run.
+                 */
 
-            //--------------------------------------------------
+                device.state =
+                    DeviceState::DISPLAY_RESULT;
+
+                break;
+
+
             case DeviceState::DISPLAY_RESULT:
-            //--------------------------------------------------
-            {
-                Serial.println("DISPLAY RESULT");
 
-                device.state = DeviceState::UPLOADING;
-            }
-            break;
+                Serial.println();
+                Serial.println(
+                    "[BP] Measurement complete"
+                );
 
-            //--------------------------------------------------
-            case DeviceState::UPLOADING:
-            //--------------------------------------------------
-            {
-                Serial.println("UPLOADING");
+                Serial.print(
+                    "SYS: "
+                );
 
-                Buzzer_play(BuzzerPattern::SUCCESS);
+                Serial.println(
+                    device.bp.systolic
+                );
 
-                device.state = DeviceState::WAITING;
-            }
-            break;
+                Serial.print(
+                    "DIA: "
+                );
 
-            //--------------------------------------------------
-            case DeviceState::ALERT:
-            //--------------------------------------------------
-            {
-                Serial.println("CRITICAL ALERT");
+                Serial.println(
+                    device.bp.diastolic
+                );
 
-                Buzzer_play(BuzzerPattern::CRITICAL);
+                Serial.print(
+                    "MAP: "
+                );
 
-                device.state = DeviceState::DISPLAY_RESULT;
-            }
-            break;
+                Serial.println(
+                    device.bp.meanPressure
+                );
 
-            //--------------------------------------------------
-            case DeviceState::ERROR_STATE:
-            //--------------------------------------------------
-            {
-                Serial.println("ERROR");
+                Serial.print(
+                    "HR: "
+                );
 
-                Buzzer_play(BuzzerPattern::ERROR);
+                Serial.println(
+                    device.bp.pulseRate
+                );
 
-                device.state = DeviceState::WAITING;
-            }
-            break;
+
+                /*
+                 * For now, return to waiting.
+                 *
+                 * Later this can become:
+                 *
+                 * DISPLAY_RESULT
+                 *       ↓
+                 * UPLOADING
+                 *       ↓
+                 * WAITING
+                 */
+
+                device.state =
+                    DeviceState::WAITING;
+
+                break;
+
 
             default:
-            {
-                device.state = DeviceState::WAITING;
-            }
-            break;
+
+                device.state =
+                    DeviceState::WAITING;
+
+                break;
         }
     }
+
+
+    /* =====================================================
+     * OLED
+     * ===================================================== */
+
+    OLED_update(device);
+
+
+    /*
+     * Small delay prevents the loop from running
+     * unnecessarily aggressively.
+     */
+
+    delay(5);
 }
