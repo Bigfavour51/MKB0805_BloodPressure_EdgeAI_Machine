@@ -1,4 +1,6 @@
-#include "Web_Server.h"
+// =========================================================
+// IMPLEMENTATION (web_server.cpp)
+// =========================================================
 
 #include <Arduino.h>
 #include <WebServer.h>
@@ -241,6 +243,11 @@ static void handleStatus()
     json += ",\"decisionText\":\"";
     json += getDecisionText(device);
     json += "\"";
+
+    // --- NEW EDGE AI METRIC ---
+    json += ",\"ai_score\":";
+    json += String(device.anomalyScore, 2);
+    // --------------------------
 
     json += ",\"anomalyDetected\":";
     json += device.anomalyDetected
@@ -634,10 +641,11 @@ HEART RATE
 </div>
 
 
+<!-- NEW EDGE AI AUTOENCODER SECTION -->
 <div class="section">
 
 <div class="section-title">
-AI DECISION
+EDGE AI AUTOENCODER
 </div>
 
 <div id="decisionBox"
@@ -650,6 +658,11 @@ AI DECISION
 
 </div>
 
+<!-- NEW AI MSE SCORE DISPLAY -->
+<div style="font-size: 15px; margin: 12px 0; padding: 8px; background: rgba(0,0,0,0.05); border-radius: 6px;">
+Reconstruction Loss (MSE): <strong id="aiScore" style="font-size: 18px;">--</strong>
+</div>
+
 <div id="decisionText"
      class="decision-text">
 
@@ -660,6 +673,7 @@ Waiting for measurement...
 </div>
 
 </div>
+<!-- END AI SECTION -->
 
 
 <div class="section">
@@ -831,6 +845,12 @@ async function updateDashboard()
             ).innerText =
                 data.heartRate.toFixed(0)
                 + " BPM";
+
+            // --- NEW: Update AI Score ---
+            document.getElementById(
+                "aiScore"
+            ).innerText =
+                data.ai_score.toFixed(2);
         }
         else
         {
@@ -848,6 +868,12 @@ async function updateDashboard()
                 "heartRate"
             ).innerText =
                 "-- BPM";
+
+            // --- NEW: Clear AI Score ---
+            document.getElementById(
+                "aiScore"
+            ).innerText =
+                "--";
         }
 
 

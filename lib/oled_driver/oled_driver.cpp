@@ -172,6 +172,7 @@ static void drawResult(const DeviceStatus &device)
 
     oled.setFont(u8g2_font_6x12_tf);
 
+    // --- Left Column: Standard Vitals ---
     sprintf(text, "SYS %.0f", device.bp.systolic);
     oled.drawStr(0, 18, text);
 
@@ -181,8 +182,23 @@ static void drawResult(const DeviceStatus &device)
     sprintf(text, "MAP %.0f", device.bp.meanPressure);
     oled.drawStr(0, 44, text);
 
+    // --- Right Column: Heart Rate & Edge AI ---
     sprintf(text, "HR  %.0f", device.bp.pulseRate);
     oled.drawStr(70, 18, text);
+
+    // Use a slightly smaller font for the AI readouts
+    oled.setFont(u8g2_font_5x7_tf);
+    
+    // Print the raw mathematical Anomaly Score (MSE)
+    sprintf(text, "MSE: %.2f", device.anomalyScore);
+    oled.drawStr(70, 32, text);
+
+    // Print the string status
+    if (device.anomalyScore < 2.0f) {
+        oled.drawStr(70, 42, "AI: NORMAL");
+    } else {
+        oled.drawStr(70, 42, "AI: WARNING");
+    }
 }
 
 static void drawUploading(const DeviceStatus &device)
@@ -202,15 +218,24 @@ static void drawAlert(const DeviceStatus &device)
 {
     char text[32];
 
+    // --- Draw Inverted Alert Banner ---
+    oled.setDrawColor(1);          // Set color to white
+    oled.drawBox(0, 11, 128, 12);  // Draw a solid white box across the top
+    
+    oled.setDrawColor(0);          // Set text color to black (transparent against white box)
     oled.setFont(u8g2_font_6x12_tf);
+    oled.drawStr(22, 21, "AI CRITICAL!");
+    
+    oled.setDrawColor(1);          // Restore text color to white for the rest of the screen
 
-    oled.drawStr(30, 18, "WARNING");
+    // --- Display Critical Vitals ---
+    sprintf(text, "SYS: %.0f  DIA: %.0f", device.bp.systolic, device.bp.diastolic);
+    oled.drawStr(0, 37, text);
 
-    sprintf(text, "SYS %.0f", device.bp.systolic);
-    oled.drawStr(0, 36, text);
-
-    sprintf(text, "DIA %.0f", device.bp.diastolic);
-    oled.drawStr(0, 50, text);
+    // --- Display the AI Metric that triggered the alert ---
+    oled.setFont(u8g2_font_5x7_tf);
+    sprintf(text, "Autoencoder MSE: %.2f", device.anomalyScore);
+    oled.drawStr(0, 49, text);
 }
 
 static void drawError()

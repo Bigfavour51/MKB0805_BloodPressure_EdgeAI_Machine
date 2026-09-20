@@ -26,8 +26,4 @@ void WebServer_update();
  */
 bool WebServer_isRunning();
 
-
-
-
-
 #endif // __WEB_SERVER_H__

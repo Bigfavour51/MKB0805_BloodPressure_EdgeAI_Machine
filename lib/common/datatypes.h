@@ -72,6 +72,19 @@ struct DeviceStatus
 {
     BPReading bp;
 
+    // AI Anomaly Detection
+    float anomalyScore;
+
+    // MAX30100 Optical Biometrics 
+    float heartRate = 0.0f;
+    float spo2 = 0.0f;
+
+    // Real-time Raw Signals
+    uint16_t rawPPG = 0;
+    uint16_t rawECG = 0;
+    float ppgBaseline = 0.0f;
+    float peakThreshold = 500.0f;
+
     DeviceState state = DeviceState::BOOT;
 
     bool sensorConnected = false;
